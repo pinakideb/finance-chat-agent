@@ -450,17 +450,7 @@
         <h1>Finance MCP Chat Agent</h1>
 
         <div class="tabs-container">
-            <!-- Tab Navigation -->
-            <div class="tabs-header">
-                <button class="tab-button active" onclick="switchTab('chat')">
-                    Chat Interface
-                </button>
-                <button class="tab-button" onclick="switchTab('prompts')">
-                    Prompt Selector
-                </button>
-            </div>
-
-            <!-- Chat Tab Content -->
+            <!-- Chat Interface Content -->
             <div id="chatTab" class="tab-content active">
                 <div class="panel">
                     <div class="info-box">
@@ -496,33 +486,6 @@
                             <button onclick="sendChatMessage()">Send</button>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Prompts Tab Content -->
-            <div id="promptsTab" class="tab-content">
-                <div class="panel">
-                    <div class="info-box">
-                        Select a predefined MCP prompt below and provide the required parameters to execute a guided workflow.
-                    </div>
-
-                    <div class="form-group">
-                        <label for="promptSelect">Select Prompt:</label>
-                        <select id="promptSelect" onchange="handlePromptSelection()">
-                            <option value="">-- Select a Prompt --</option>
-                        </select>
-                        <div id="promptDescription" class="prompt-description" style="display: none;"></div>
-                    </div>
-
-                    <div id="argumentsContainer" class="arguments-container" style="display: none;"></div>
-
-                    <button id="executeBtn" onclick="executePrompt()" disabled>Execute Prompt</button>
-
-                    <div class="loading" id="promptLoading">
-                        <span class="spinner"></span> Executing...
-                    </div>
-
-                    <div id="promptResults" class="results"></div>
                 </div>
             </div>
         </div>
@@ -564,28 +527,6 @@
     <script>
         let prompts = [];
         let chatHistory = [];
-
-        // Tab switching function
-        function switchTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-
-            // Remove active class from all buttons
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-
-            // Show selected tab
-            if (tabName === 'chat') {
-                document.getElementById('chatTab').classList.add('active');
-                event.target.classList.add('active');
-            } else if (tabName === 'prompts') {
-                document.getElementById('promptsTab').classList.add('active');
-                event.target.classList.add('active');
-            }
-        }
 
         // Load prompts on page load
         window.onload = function() {
@@ -814,146 +755,6 @@
             });
 
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        function handlePromptSelection() {
-            const select = document.getElementById('promptSelect');
-            const selectedPromptName = select.value;
-
-            if (!selectedPromptName) {
-                document.getElementById('promptDescription').style.display = 'none';
-                document.getElementById('argumentsContainer').style.display = 'none';
-                document.getElementById('executeBtn').disabled = true;
-                return;
-            }
-
-            const prompt = prompts.find(p => p.name === selectedPromptName);
-
-            // Show description
-            const descDiv = document.getElementById('promptDescription');
-            descDiv.textContent = prompt.description;
-            descDiv.style.display = 'block';
-
-            // Show argument inputs
-            const argsContainer = document.getElementById('argumentsContainer');
-            argsContainer.innerHTML = '';
-
-            if (prompt.arguments && prompt.arguments.length > 0) {
-                argsContainer.style.display = 'block';
-                prompt.arguments.forEach(arg => {
-                    const formGroup = document.createElement('div');
-                    formGroup.className = 'form-group';
-
-                    const label = document.createElement('label');
-                    label.textContent = `${arg.name}${arg.required ? ' *' : ''}: ${arg.description || ''}`;
-                    formGroup.appendChild(label);
-
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.id = `arg_${arg.name}`;
-                    input.placeholder = `Enter ${arg.name}`;
-                    if (arg.required) {
-                        input.required = true;
-                    }
-                    formGroup.appendChild(input);
-
-                    argsContainer.appendChild(formGroup);
-                });
-            } else {
-                argsContainer.style.display = 'none';
-            }
-
-            document.getElementById('executeBtn').disabled = false;
-        }
-
-        async function executePrompt() {
-            const select = document.getElementById('promptSelect');
-            const promptName = select.value;
-
-            if (!promptName) {
-                alert('Please select a prompt');
-                return;
-            }
-
-            const prompt = prompts.find(p => p.name === promptName);
-
-            // Gather arguments
-            const args = {};
-            if (prompt.arguments) {
-                for (const arg of prompt.arguments) {
-                    const input = document.getElementById(`arg_${arg.name}`);
-                    const value = input.value.trim();
-
-                    if (arg.required && !value) {
-                        alert(`Please provide a value for ${arg.name}`);
-                        return;
-                    }
-
-                    if (value) {
-                        args[arg.name] = value;
-                    }
-                }
-            }
-
-            // Show loading
-            document.getElementById('promptLoading').classList.add('active');
-            document.getElementById('executeBtn').disabled = true;
-            document.getElementById('promptResults').innerHTML = '';
-
-            try {
-                const response = await fetch('/api/execute-prompt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt_name: promptName,
-                        arguments: args
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    displayPromptResults(data.results);
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Error executing prompt:', error);
-                alert('Failed to execute prompt: ' + error.message);
-            } finally {
-                document.getElementById('promptLoading').classList.remove('active');
-                document.getElementById('executeBtn').disabled = false;
-            }
-        }
-
-        function displayPromptResults(results) {
-            const container = document.getElementById('promptResults');
-            container.innerHTML = '';
-
-            results.forEach(result => {
-                const resultDiv = document.createElement('div');
-                resultDiv.className = 'result-item';
-
-                if (result.type === 'response') {
-                    resultDiv.innerHTML = `
-                        <div class="result-round">Round ${result.round}</div>
-                        <div class="message-content">${escapeHtml(result.content)}</div>
-                    `;
-                } else if (result.type === 'tools') {
-                    let toolsHtml = `<div class="result-round">Tools Called (Round ${result.round})</div>`;
-                    result.tools.forEach(tool => {
-                        toolsHtml += `
-                            <div class="tool-call">
-                                <div class="tool-name">${tool.name}(${JSON.stringify(tool.args)})</div>
-                                <div class="tool-result">${escapeHtml(formatJson(tool.result))}</div>
-                            </div>
-                        `;
-                    });
-                    resultDiv.innerHTML = toolsHtml;
-                }
-
-                container.appendChild(resultDiv);
-            });
         }
 
         function handleChatKeyPress(event) {
