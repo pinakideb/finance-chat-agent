@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+
+    "finance-mcp": {
+      "type": "stdio",
+      "command": "c:\\Users\\pinak\\.local\\bin\\uv.exe",
+      "args": [
+        "run",
+        "--with",
+        "mcp[cli]", 
+        "mcp",
+        "run",
+        "C:\\Users\\pinak\\code\\finance-mcp-server\\main.py"
+      ],
+      "env": {}
+    }  
+  }
+}
