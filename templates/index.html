@@ -211,9 +211,21 @@
 
         /* Chat Interface Styles */
         .chat-container {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 20px;
+            height: 600px;
+        }
+
+        .chat-input-panel {
             display: flex;
             flex-direction: column;
-            height: 600px;
+            gap: 15px;
+        }
+
+        .chat-messages-panel {
+            display: flex;
+            flex-direction: column;
         }
 
         .chat-messages {
@@ -222,7 +234,6 @@
             padding: 15px;
             background: #f5f5f5;
             border-radius: 8px;
-            margin-bottom: 15px;
         }
 
         .message {
@@ -461,29 +472,35 @@
                     </div>
 
                     <div class="chat-container">
-                        <div class="chat-messages" id="chatMessages">
-                            <div class="message assistant">
-                                <div class="message-role">ASSISTANT</div>
-                                <div class="message-content">Hello! I'm your finance assistant. I can help you with hypothetical P&L calculations, account information, and hierarchy data. What would you like to know?</div>
+                        <!-- Left Panel: Input Area -->
+                        <div class="chat-input-panel">
+                            <div class="chat-input-area">
+                                <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
+                                    ⚙
+                                </button>
+                                <textarea
+                                    id="chatInput"
+                                    class="chat-input"
+                                    placeholder="Type your message here..."
+                                    rows="10"
+                                    onkeypress="handleChatKeyPress(event)"
+                                ></textarea>
+                                <button onclick="sendChatMessage()">Send</button>
+                            </div>
+
+                            <div class="loading" id="chatLoading">
+                                <span class="spinner"></span> Thinking...
                             </div>
                         </div>
 
-                        <div class="loading" id="chatLoading">
-                            <span class="spinner"></span> Thinking...
-                        </div>
-
-                        <div class="chat-input-area">
-                            <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
-                                ⚙
-                            </button>
-                            <textarea
-                                id="chatInput"
-                                class="chat-input"
-                                placeholder="Type your message here..."
-                                rows="3"
-                                onkeypress="handleChatKeyPress(event)"
-                            ></textarea>
-                            <button onclick="sendChatMessage()">Send</button>
+                        <!-- Right Panel: Chat Messages -->
+                        <div class="chat-messages-panel">
+                            <div class="chat-messages" id="chatMessages">
+                                <div class="message assistant">
+                                    <div class="message-role">ASSISTANT</div>
+                                    <div class="message-content">Hello! I'm your finance assistant. I can help you with hypothetical P&L calculations, account information, and hierarchy data. What would you like to know?</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
