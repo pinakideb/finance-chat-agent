@@ -221,6 +221,8 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            padding-right: 20px;
+            border-right: 3px solid #667eea;
         }
 
         .chat-messages-panel {
@@ -300,11 +302,21 @@
 
         .chat-input-area {
             display: flex;
+            flex-direction: column;
             gap: 10px;
         }
 
-        .chat-input {
+        .button-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .button-row button {
             flex: 1;
+        }
+
+        .chat-input {
+            width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -494,9 +506,6 @@
                         <!-- Left Panel: Input Area -->
                         <div class="chat-input-panel">
                             <div class="chat-input-area">
-                                <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
-                                    ⚙
-                                </button>
                                 <textarea
                                     id="chatInput"
                                     class="chat-input"
@@ -504,7 +513,12 @@
                                     rows="10"
                                     onkeypress="handleChatKeyPress(event)"
                                 ></textarea>
-                                <button onclick="sendChatMessage()">Send</button>
+                                <div class="button-row">
+                                    <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
+                                        ⚙
+                                    </button>
+                                    <button onclick="sendChatMessage()">Send</button>
+                                </div>
                             </div>
 
                             <div class="loading" id="chatLoading">
