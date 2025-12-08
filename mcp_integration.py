@@ -5,10 +5,15 @@ Connects to the finance MCP server and converts MCP tools to LangChain tools
 
 import asyncio
 import json
+import logging
 from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from langchain_core.tools import tool
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class MCPToolManager:
@@ -53,15 +58,45 @@ class MCPToolManager:
         if not self.session:
             raise RuntimeError("Not connected to MCP server. Call connect() first.")
 
+        # Log the tool call
+        logger.info(f"[MCP TOOL CALL] Tool: {tool_name}, Arguments: {arguments}")
+
         result = await self.session.call_tool(tool_name, arguments)
 
-        # Extract content from result
-        if hasattr(result, 'content') and len(result.content) > 0:
-            content_item = result.content[0]
-            if hasattr(content_item, 'text'):
-                return content_item.text
+        # Log the raw result for debugging
+        logger.info(f"[MCP RAW RESULT] Tool: {tool_name}, Raw result: {result}")
+        logger.info(f"[MCP RAW RESULT] Result type: {type(result)}")
+        if hasattr(result, 'content'):
+            logger.info(f"[MCP RAW RESULT] Content length: {len(result.content)}")
+            for i, content_item in enumerate(result.content):
+                logger.info(f"[MCP RAW RESULT] Content[{i}]: type={type(content_item)}, value={content_item}")
 
-        return str(result)
+        # Extract content from result
+        extracted_result = None
+        if hasattr(result, 'content') and len(result.content) > 0:
+            # Extract all content items, not just the first one
+            if len(result.content) == 1:
+                # Single content item - return as string
+                content_item = result.content[0]
+                if hasattr(content_item, 'text'):
+                    extracted_result = content_item.text
+            else:
+                # Multiple content items - combine them
+                text_items = []
+                for content_item in result.content:
+                    if hasattr(content_item, 'text'):
+                        text_items.append(content_item.text)
+                # Join with newlines or commas depending on content
+                if text_items:
+                    extracted_result = '\n'.join(text_items)
+
+        if extracted_result is None:
+            extracted_result = str(result)
+
+        # Log the extracted result
+        logger.info(f"[MCP TOOL RESULT] Tool: {tool_name}, Extracted Result: {extracted_result}")
+
+        return extracted_result
 
     async def list_prompts(self):
         """List all available prompts from the MCP server"""
