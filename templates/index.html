@@ -338,6 +338,111 @@
             margin: 2px;
             font-size: 0.85em;
         }
+
+        /* Prompt Icon Button */
+        .prompt-icon-btn {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .prompt-icon-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        /* Modal Content */
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalFadeIn 0.3s;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal-header {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .modal-close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            color: #999;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .btn-secondary {
+            background: #ccc;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #bbb;
+            transform: none;
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -378,6 +483,9 @@
                         </div>
 
                         <div class="chat-input-area">
+                            <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
+                                ⚙
+                            </button>
                             <textarea
                                 id="chatInput"
                                 class="chat-input"
@@ -416,6 +524,39 @@
 
                     <div id="promptResults" class="results"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Selection Modal -->
+    <div id="promptModal" class="modal-overlay" onclick="closeModalOnOverlay(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-close" onclick="closePromptModal()">&times;</span>
+                Select a Prompt
+            </div>
+
+            <div class="info-box">
+                Choose a predefined MCP prompt and configure its parameters.
+            </div>
+
+            <div class="form-group">
+                <label for="modalPromptSelect">Select Prompt:</label>
+                <select id="modalPromptSelect" onchange="handleModalPromptSelection()">
+                    <option value="">-- Select a Prompt --</option>
+                </select>
+                <div id="modalPromptDescription" class="prompt-description" style="display: none;"></div>
+            </div>
+
+            <div id="modalArgumentsContainer" class="arguments-container" style="display: none;"></div>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closePromptModal()">Cancel</button>
+                <button id="modalExecuteBtn" onclick="executePromptFromModal()" disabled>Execute</button>
+            </div>
+
+            <div class="loading" id="modalLoading">
+                <span class="spinner"></span> Executing...
             </div>
         </div>
     </div>
@@ -485,6 +626,194 @@
             } catch (error) {
                 console.error('Error loading tools:', error);
             }
+        }
+
+        // Modal functions
+        function openPromptModal() {
+            const modal = document.getElementById('promptModal');
+            modal.classList.add('active');
+
+            // Populate modal prompt selector if not already done
+            const modalSelect = document.getElementById('modalPromptSelect');
+            if (modalSelect.options.length === 1) {
+                prompts.forEach(prompt => {
+                    const option = document.createElement('option');
+                    option.value = prompt.name;
+                    option.textContent = `${prompt.name} - ${prompt.description}`;
+                    modalSelect.appendChild(option);
+                });
+            }
+        }
+
+        function closePromptModal() {
+            const modal = document.getElementById('promptModal');
+            modal.classList.remove('active');
+
+            // Reset modal state
+            document.getElementById('modalPromptSelect').value = '';
+            document.getElementById('modalPromptDescription').style.display = 'none';
+            document.getElementById('modalArgumentsContainer').style.display = 'none';
+            document.getElementById('modalArgumentsContainer').innerHTML = '';
+            document.getElementById('modalExecuteBtn').disabled = true;
+        }
+
+        function closeModalOnOverlay(event) {
+            if (event.target.id === 'promptModal') {
+                closePromptModal();
+            }
+        }
+
+        function handleModalPromptSelection() {
+            const select = document.getElementById('modalPromptSelect');
+            const selectedPromptName = select.value;
+
+            if (!selectedPromptName) {
+                document.getElementById('modalPromptDescription').style.display = 'none';
+                document.getElementById('modalArgumentsContainer').style.display = 'none';
+                document.getElementById('modalExecuteBtn').disabled = true;
+                return;
+            }
+
+            const prompt = prompts.find(p => p.name === selectedPromptName);
+
+            // Show description
+            const descDiv = document.getElementById('modalPromptDescription');
+            descDiv.textContent = prompt.description;
+            descDiv.style.display = 'block';
+
+            // Show argument inputs
+            const argsContainer = document.getElementById('modalArgumentsContainer');
+            argsContainer.innerHTML = '';
+
+            if (prompt.arguments && prompt.arguments.length > 0) {
+                argsContainer.style.display = 'block';
+                prompt.arguments.forEach(arg => {
+                    const formGroup = document.createElement('div');
+                    formGroup.className = 'form-group';
+
+                    const label = document.createElement('label');
+                    label.textContent = `${arg.name}${arg.required ? ' *' : ''}: ${arg.description || ''}`;
+                    formGroup.appendChild(label);
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = `modal_arg_${arg.name}`;
+                    input.placeholder = `Enter ${arg.name}`;
+                    if (arg.required) {
+                        input.required = true;
+                    }
+                    formGroup.appendChild(input);
+
+                    argsContainer.appendChild(formGroup);
+                });
+            } else {
+                argsContainer.style.display = 'none';
+            }
+
+            document.getElementById('modalExecuteBtn').disabled = false;
+        }
+
+        async function executePromptFromModal() {
+            const select = document.getElementById('modalPromptSelect');
+            const promptName = select.value;
+
+            if (!promptName) {
+                alert('Please select a prompt');
+                return;
+            }
+
+            const prompt = prompts.find(p => p.name === promptName);
+
+            // Gather arguments
+            const args = {};
+            if (prompt.arguments) {
+                for (const arg of prompt.arguments) {
+                    const input = document.getElementById(`modal_arg_${arg.name}`);
+                    const value = input.value.trim();
+
+                    if (arg.required && !value) {
+                        alert(`Please provide a value for ${arg.name}`);
+                        return;
+                    }
+
+                    if (value) {
+                        args[arg.name] = value;
+                    }
+                }
+            }
+
+            // Show loading
+            document.getElementById('modalLoading').classList.add('active');
+            document.getElementById('modalExecuteBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/execute-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt_name: promptName,
+                        arguments: args
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Close modal
+                    closePromptModal();
+
+                    // Add results to chat as a system message
+                    addPromptResultsToChat(promptName, data.results);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error executing prompt:', error);
+                alert('Failed to execute prompt: ' + error.message);
+            } finally {
+                document.getElementById('modalLoading').classList.remove('active');
+                document.getElementById('modalExecuteBtn').disabled = false;
+            }
+        }
+
+        function addPromptResultsToChat(promptName, results) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            // Add a message indicating prompt execution
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message assistant';
+            headerDiv.innerHTML = `
+                <div class="message-role">PROMPT EXECUTION: ${promptName}</div>
+                <div class="message-content">Executed prompt "${promptName}". Results below:</div>
+            `;
+            messagesDiv.appendChild(headerDiv);
+
+            // Add each result
+            results.forEach(result => {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'message assistant';
+
+                if (result.type === 'response') {
+                    resultDiv.innerHTML = `
+                        <div class="message-role">ASSISTANT (Round ${result.round})</div>
+                        <div class="message-content">${escapeHtml(result.content)}</div>
+                    `;
+                } else if (result.type === 'tools') {
+                    let toolsHtml = `
+                        <div class="message-role">TOOLS CALLED (Round ${result.round})</div>
+                        <div class="tool-calls-info">`;
+                    result.tools.forEach(tool => {
+                        toolsHtml += `<strong>${tool.name}(${JSON.stringify(tool.args)})</strong><br>`;
+                        toolsHtml += `<div class="tool-result">${escapeHtml(formatJson(tool.result))}</div>`;
+                    });
+                    toolsHtml += '</div>';
+                    resultDiv.innerHTML = toolsHtml;
+                }
+
+                messagesDiv.appendChild(resultDiv);
+            });
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function handlePromptSelection() {
