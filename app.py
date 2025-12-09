@@ -61,8 +61,8 @@ async def initialize_mcp():
     global mcp_manager, llm, tools
 
     if mcp_manager is None:
-        mcp_server_path = r"C:\Users\pinak\code\finance-mcp-server\main.py"
-        mcp_manager = MCPToolManager(mcp_server_path)
+        mcp_server_url = "http://localhost:8000/sse"
+        mcp_manager = MCPToolManager(mcp_server_url)
         await mcp_manager.connect()
         tools = await mcp_manager.get_langchain_tools()
         llm = ChatAnthropic(model="claude-sonnet-4-5", temperature=0)
@@ -316,6 +316,24 @@ def test_route():
     return jsonify({'status': 'ok', 'message': 'Test route works!'})
 
 
+@app.route('/api/test-agent', methods=['GET'])
+def test_agent():
+    """Test agent initialization"""
+    try:
+        import traceback
+        async def test_init():
+            await initialize_mcp()
+            mcp_server_url = "http://localhost:8000/sse"
+            agent = FinanceAgent(mcp_server_url)
+            await agent.initialize()
+            return "Agent initialized successfully"
+
+        result = run_async(test_init())
+        return jsonify({'success': True, 'message': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
 @app.route('/api/agent-chat', methods=['POST'])
 def agent_chat():
     """Streaming endpoint for LangGraph agent with Server-Sent Events"""
@@ -336,9 +354,9 @@ def agent_chat():
             print("[AGENT-CHAT] MCP initialized")
 
             # Create agent instance
-            mcp_server_path = r"C:\Users\pinak\code\finance-mcp-server\main.py"
-            print(f"[AGENT-CHAT] Creating agent with MCP path: {mcp_server_path}")
-            agent = FinanceAgent(mcp_server_path)
+            mcp_server_url = "http://localhost:8000/sse"
+            print(f"[AGENT-CHAT] Creating agent with MCP URL: {mcp_server_url}")
+            agent = FinanceAgent(mcp_server_url)
             print("[AGENT-CHAT] Agent created, initializing...")
             await agent.initialize()
             print("[AGENT-CHAT] Agent initialized, starting run...")
@@ -438,7 +456,14 @@ def agent_chat():
             traceback.print_exc()
             yield f"data: {json.dumps({'event_type': 'error', 'data': str(e)})}\n\n"
 
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    try:
+        return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    except Exception as e:
+        import traceback
+        sys.stderr.write(f"\n\n[AGENT-CHAT] Fatal error before streaming started:\n")
+        sys.stderr.write(traceback.format_exc())
+        sys.stderr.flush()
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 @app.route('/api/tools', methods=['GET'])
@@ -460,6 +485,24 @@ def get_tools():
     except Exception as e:
         print(f"Error in get_tools: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/mcp-status', methods=['GET'])
+def mcp_status():
+    """Check MCP connection status"""
+    global mcp_manager
+
+    if mcp_manager is None:
+        return jsonify({
+            'connected': False,
+            'message': 'MCP not initialized'
+        })
+
+    return jsonify({
+        'connected': True,
+        'message': 'MCP server connected',
+        'tools_count': len(tools) if tools else 0
+    })
 
 
 if __name__ == '__main__':

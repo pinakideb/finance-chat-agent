@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance MCP Chat Agent</title>
+    <title>Market Risk Finance - SME</title>
     <style>
         * {
             margin: 0;
@@ -357,6 +357,58 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* Connection Status Styles */
+        .connection-status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .connection-status.connecting {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #856404;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+
+        .connection-status.error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+
+        .connection-status-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .connection-icon {
+            font-size: 1.3em;
+            animation: none;
+        }
+
+        .connection-status.connecting .connection-icon {
+            animation: rotation 2s linear infinite;
+        }
+
+        @keyframes rotation {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .connection-text {
+            flex: 1;
+        }
+
         .info-box {
             background: #e3f2fd;
             padding: 12px;
@@ -651,6 +703,14 @@
             <!-- Chat Interface Content -->
             <div id="chatTab" class="tab-content active">
                 <div class="panel">
+                    <!-- MCP Connection Status -->
+                    <div class="connection-status" id="connectionStatus">
+                        <div class="connection-status-content">
+                            <span class="connection-icon" id="connectionIcon">⏳</span>
+                            <span class="connection-text" id="connectionText">Connecting to MCP server...</span>
+                        </div>
+                    </div>
+
                     <div class="info-box">
                         Ask custom questions and the AI agent will use the available MCP tools to help you.
                         <div class="available-tools" id="availableTools">
@@ -673,7 +733,7 @@
                                     <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
                                         ⚙
                                     </button>
-                                    <button onclick="sendAgentMessage()" id="agentSendBtn" class="agent-mode-btn">Send</button>
+                                    <button onclick="sendAgentMessage()" id="agentSendBtn" class="agent-mode-btn">Ask Agent</button>
                                 </div>
                             </div>
 
@@ -736,9 +796,60 @@
 
         // Load prompts on page load
         window.onload = function() {
+            checkMCPConnection();
             loadPrompts();
             loadTools();
         };
+
+        async function checkMCPConnection() {
+            const statusDiv = document.getElementById('connectionStatus');
+            const iconSpan = document.getElementById('connectionIcon');
+            const textSpan = document.getElementById('connectionText');
+
+            // Set initial connecting state
+            statusDiv.className = 'connection-status connecting';
+            iconSpan.textContent = '⏳';
+            textSpan.textContent = 'Connecting to MCP server...';
+
+            try {
+                // Try to load tools which will trigger MCP initialization
+                const response = await fetch('/api/mcp-status');
+                const data = await response.json();
+
+                if (data.connected) {
+                    // Connected successfully
+                    statusDiv.className = 'connection-status connected';
+                    iconSpan.textContent = '✅';
+                    textSpan.textContent = `Connected to MCP server (${data.tools_count} tools available)`;
+
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        statusDiv.style.opacity = '0';
+                        setTimeout(() => {
+                            statusDiv.style.display = 'none';
+                        }, 300);
+                    }, 5000);
+                } else {
+                    // Not connected, will connect on first use
+                    statusDiv.className = 'connection-status connecting';
+                    iconSpan.textContent = '⏳';
+                    textSpan.textContent = 'MCP will connect when you send your first message';
+
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => {
+                        statusDiv.style.opacity = '0';
+                        setTimeout(() => {
+                            statusDiv.style.display = 'none';
+                        }, 300);
+                    }, 3000);
+                }
+            } catch (error) {
+                console.error('Error checking MCP connection:', error);
+                statusDiv.className = 'connection-status error';
+                iconSpan.textContent = '❌';
+                textSpan.textContent = 'Failed to connect to MCP server';
+            }
+        }
 
         async function loadPrompts() {
             try {
@@ -770,8 +881,34 @@
                 ).join('');
 
                 toolsList.innerHTML = toolsHtml;
+
+                // Update connection status after tools are loaded
+                const statusDiv = document.getElementById('connectionStatus');
+                const iconSpan = document.getElementById('connectionIcon');
+                const textSpan = document.getElementById('connectionText');
+
+                if (data.tools && data.tools.length > 0) {
+                    statusDiv.className = 'connection-status connected';
+                    iconSpan.textContent = '✅';
+                    textSpan.textContent = `Connected to MCP server (${data.tools.length} tools available)`;
+
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        statusDiv.style.opacity = '0';
+                        setTimeout(() => {
+                            statusDiv.style.display = 'none';
+                        }, 300);
+                    }, 5000);
+                }
             } catch (error) {
                 console.error('Error loading tools:', error);
+                const statusDiv = document.getElementById('connectionStatus');
+                const iconSpan = document.getElementById('connectionIcon');
+                const textSpan = document.getElementById('connectionText');
+
+                statusDiv.className = 'connection-status error';
+                iconSpan.textContent = '❌';
+                textSpan.textContent = 'Failed to load tools from MCP server';
             }
         }
 
