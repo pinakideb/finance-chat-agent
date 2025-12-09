@@ -29,6 +29,7 @@ Tool descriptions:
 - get_all_accounts(): List all account numbers
 - get_account_pnl(account_number): Get P&L components for a specific account
 - calculate_hypothetical_pnl(account_number, hierarchy): Calculate hypothetical P&L for an account using a hierarchy
+- export_to_excel(export_type, account_number, hierarchy, filename): Export financial data to Excel file in Downloads folder. export_type options: "all_accounts" (default), "account_pnl", "hypothetical_pnl", "all_hierarchies"
 
 Create a step-by-step plan. For each step:
 1. Describe what needs to be done
