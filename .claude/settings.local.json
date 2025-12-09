@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(git -C /c/Users/pinak/code/finance-chat-agent log --oneline)",
+      "Bash(python app.py:*)"
+    ]
+  },
   "disabledMcpjsonServers": [
     "finance-mcp"
   ]

@@ -1,7 +1,7 @@
 """
 Flask web application for Finance MCP Chat Agent
 """
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import asyncio
 import json
@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from mcp_integration import MCPToolManager
+from agent.agent import FinanceAgent
 import sys
 import io
 import threading
@@ -307,6 +308,137 @@ def chat():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/test', methods=['GET', 'POST'])
+def test_route():
+    """Simple test route"""
+    return jsonify({'status': 'ok', 'message': 'Test route works!'})
+
+
+@app.route('/api/agent-chat', methods=['POST'])
+def agent_chat():
+    """Streaming endpoint for LangGraph agent with Server-Sent Events"""
+    print("[AGENT-CHAT] Request received")
+    data = request.json
+    message = data.get('message')
+    print(f"[AGENT-CHAT] Message: {message}")
+
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+
+    def generate():
+        print("[AGENT-CHAT] Starting generator")
+        """Generator for SSE streaming"""
+        async def stream_agent_response():
+            print("[AGENT-CHAT] Initializing MCP...")
+            await initialize_mcp()
+            print("[AGENT-CHAT] MCP initialized")
+
+            # Create agent instance
+            mcp_server_path = r"C:\Users\pinak\code\finance-mcp-server\main.py"
+            print(f"[AGENT-CHAT] Creating agent with MCP path: {mcp_server_path}")
+            agent = FinanceAgent(mcp_server_path)
+            print("[AGENT-CHAT] Agent created, initializing...")
+            await agent.initialize()
+            print("[AGENT-CHAT] Agent initialized, starting run...")
+
+            try:
+                # Stream execution
+                print(f"[AGENT-CHAT] Running agent with query: {message}")
+                async for event in agent.run(message):
+                    print(f"[AGENT-CHAT] Received event: {list(event.keys())}")
+                    # event is a dict like {"node_name": state_update}
+                    for node_name, state_update in event.items():
+                        # Extract and stream different event types
+
+                        # Reasoning steps
+                        if "reasoning_steps" in state_update and state_update["reasoning_steps"]:
+                            latest_reasoning = state_update["reasoning_steps"][-1]
+                            print(f"[AGENT-CHAT] Sending reasoning step: {latest_reasoning.step_type}")
+                            sse_data = {
+                                "event_type": "reasoning",
+                                "data": {
+                                    "step_type": latest_reasoning.step_type,
+                                    "content": latest_reasoning.content,
+                                    "timestamp": latest_reasoning.timestamp,
+                                    "metadata": latest_reasoning.metadata
+                                },
+                                "state_snapshot": {
+                                    "iteration_count": state_update.get("iteration_count", 0),
+                                    "completed_subtasks": len(state_update.get("completed_subtasks", [])),
+                                    "total_subtasks": len(state_update.get("subtasks", []))
+                                }
+                            }
+                            yield f"data: {json.dumps(sse_data)}\n\n"
+
+                        # Subtask updates
+                        if "subtasks" in state_update and state_update["subtasks"]:
+                            for subtask in state_update["subtasks"]:
+                                sse_data = {
+                                    "event_type": "subtask_update",
+                                    "data": {
+                                        "id": subtask.id,
+                                        "description": subtask.description,
+                                        "status": subtask.status,
+                                        "assigned_tools": subtask.assigned_tools,
+                                        "result": subtask.result,
+                                        "error": subtask.error
+                                    }
+                                }
+                                yield f"data: {json.dumps(sse_data)}\n\n"
+
+                        # Tool executions
+                        if "tool_executions" in state_update and state_update["tool_executions"]:
+                            latest_exec = state_update["tool_executions"][-1]
+                            sse_data = {
+                                "event_type": "tool_execution",
+                                "data": {
+                                    "tool_name": latest_exec.tool_name,
+                                    "arguments": latest_exec.arguments,
+                                    "result": latest_exec.result,
+                                    "error": latest_exec.error,
+                                    "timestamp": latest_exec.timestamp,
+                                    "subtask_id": latest_exec.subtask_id
+                                }
+                            }
+                            yield f"data: {json.dumps(sse_data)}\n\n"
+
+                        # Final answer
+                        if state_update.get("final_answer"):
+                            sse_data = {
+                                "event_type": "final_answer",
+                                "data": state_update["final_answer"]
+                            }
+                            yield f"data: {json.dumps(sse_data)}\n\n"
+
+                # Send completion event
+                yield f"data: {json.dumps({'event_type': 'done'})}\n\n"
+
+            finally:
+                try:
+                    await agent.close()
+                except Exception as e:
+                    # Ignore cleanup errors (async context scope issues)
+                    print(f"[AGENT-CHAT] Cleanup warning (non-critical): {e}")
+
+        # Run the async generator in the event loop
+        loop = get_event_loop()
+        async_gen = stream_agent_response()
+
+        try:
+            while True:
+                future = asyncio.run_coroutine_threadsafe(async_gen.__anext__(), loop)
+                yield future.result(timeout=120)
+        except StopAsyncIteration:
+            pass
+        except Exception as e:
+            print(f"Error in agent stream: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'event_type': 'error', 'data': str(e)})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
 @app.route('/api/tools', methods=['GET'])

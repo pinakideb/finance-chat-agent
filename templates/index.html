@@ -485,6 +485,162 @@
             transform: none;
             box-shadow: none;
         }
+
+        /* Agent Mode Styles */
+        .agent-mode-btn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .agent-thinking {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+
+        .thinking-header {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .reasoning-steps {
+            margin-bottom: 10px;
+        }
+
+        .reasoning-step {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .reasoning-step.planning {
+            background: #e3f2fd;
+            border-left: 3px solid #2196f3;
+        }
+
+        .reasoning-step.tool_call {
+            background: #fff3cd;
+            border-left: 3px solid #ffc107;
+        }
+
+        .reasoning-step.validation {
+            background: #d4edda;
+            border-left: 3px solid #28a745;
+        }
+
+        .reasoning-step.error {
+            background: #f8d7da;
+            border-left: 3px solid #dc3545;
+        }
+
+        .reasoning-step.summary {
+            background: #e7f3ff;
+            border-left: 3px solid #0066cc;
+        }
+
+        .step-icon {
+            font-size: 1.2em;
+            min-width: 24px;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-time {
+            font-size: 0.8em;
+            color: #999;
+            white-space: nowrap;
+        }
+
+        .subtasks-progress {
+            margin: 10px 0;
+        }
+
+        .subtask-item {
+            padding: 6px 10px;
+            margin: 3px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+
+        .subtask-item.pending {
+            background: #e0e0e0;
+        }
+
+        .subtask-item.in_progress {
+            background: #fff3cd;
+            animation: pulse 1.5s infinite;
+        }
+
+        .subtask-item.completed {
+            background: #d4edda;
+        }
+
+        .subtask-item.failed {
+            background: #f8d7da;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .status-icon {
+            font-size: 1em;
+        }
+
+        .subtask-desc {
+            flex: 1;
+        }
+
+        .tool-executions {
+            margin-top: 10px;
+        }
+
+        .tool-execution {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+
+        .tool-execution-name {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 5px;
+        }
+
+        .tool-execution-args {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            background: #f5f5f5;
+            padding: 5px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .tool-execution-result {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -517,7 +673,8 @@
                                     <button class="prompt-icon-btn" onclick="openPromptModal()" title="Select a prompt">
                                         ⚙
                                     </button>
-                                    <button onclick="sendChatMessage()">Send</button>
+                                    <button onclick="sendChatMessage()" id="normalSendBtn">Send (Normal)</button>
+                                    <button onclick="sendAgentMessage()" id="agentSendBtn" class="agent-mode-btn">Send (Agent Mode)</button>
                                 </div>
                             </div>
 
@@ -897,6 +1054,250 @@
             } catch {
                 return str;
             }
+        }
+
+        // ========== AGENT MODE FUNCTIONS ==========
+
+        async function sendAgentMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+
+            if (!message) {
+                return;
+            }
+
+            // Add user message to chat
+            addMessageToChat('user', message);
+            input.value = '';
+
+            // Create thinking container
+            const thinkingDiv = createThinkingContainer();
+
+            // Show loading
+            document.getElementById('chatLoading').classList.add('active');
+
+            try {
+                // Use fetch for SSE
+                const response = await fetch('/api/agent-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let eventCount = 0;
+
+                console.log('Starting SSE stream...');
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        console.log('SSE stream completed. Total events:', eventCount);
+                        break;
+                    }
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+
+                    // Process complete lines
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        const line = lines[i].trim();
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.substring(6);
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                eventCount++;
+                                console.log(`Event #${eventCount}:`, data.event_type);
+                                handleAgentEvent(thinkingDiv, data);
+                            } catch (e) {
+                                console.error('Error parsing SSE data:', e, jsonStr);
+                            }
+                        } else if (line) {
+                            console.log('Non-data line:', line);
+                        }
+                    }
+
+                    // Keep the incomplete line in buffer
+                    buffer = lines[lines.length - 1];
+                }
+
+            } catch (error) {
+                console.error('Error in agent mode:', error);
+                addMessageToChat('assistant', 'Error: ' + error.message);
+                thinkingDiv.remove();
+            } finally {
+                document.getElementById('chatLoading').classList.remove('active');
+            }
+        }
+
+        function handleAgentEvent(thinkingDiv, event) {
+            console.log('Agent Event:', event.event_type, event);
+
+            // Update status indicator
+            const statusSpan = document.getElementById('agent-current-status');
+
+            switch (event.event_type) {
+                case 'reasoning':
+                    if (statusSpan) {
+                        const stepTypeMap = {
+                            'planning': 'Planning tasks...',
+                            'tool_call': 'Executing tools...',
+                            'validation': 'Validating results...',
+                            'error': 'Handling error...',
+                            'summary': 'Synthesizing answer...'
+                        };
+                        statusSpan.textContent = stepTypeMap[event.data.step_type] || 'Processing...';
+                    }
+                    addReasoningStep(thinkingDiv, event.data);
+                    break;
+
+                case 'subtask_update':
+                    if (statusSpan && event.data.status === 'in_progress') {
+                        statusSpan.textContent = `Working on: ${event.data.description}`;
+                    }
+                    updateSubtaskStatus(thinkingDiv, event.data);
+                    break;
+
+                case 'tool_execution':
+                    if (statusSpan) {
+                        statusSpan.textContent = `Calling ${event.data.tool_name}...`;
+                    }
+                    addToolExecution(thinkingDiv, event.data);
+                    break;
+
+                case 'final_answer':
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Complete!';
+                    }
+                    addMessageToChat('assistant', event.data);
+                    thinkingDiv.remove();
+                    break;
+
+                case 'done':
+                    console.log('Workflow complete');
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Workflow complete';
+                    }
+                    break;
+
+                case 'error':
+                    console.error('Agent error:', event.data);
+                    if (statusSpan) {
+                        statusSpan.textContent = 'Error occurred';
+                    }
+                    addMessageToChat('assistant', 'Error: ' + event.data);
+                    thinkingDiv.remove();
+                    break;
+
+                default:
+                    console.warn('Unknown event type:', event.event_type);
+            }
+        }
+
+        function createThinkingContainer() {
+            const container = document.createElement('div');
+            container.className = 'agent-thinking';
+            container.innerHTML = `
+                <div class="thinking-header">🤖 Agent Reasoning Process</div>
+                <div class="agent-status" style="padding: 8px; background: #e3f2fd; border-radius: 5px; margin-bottom: 10px; font-size: 0.9em; color: #1976d2;">
+                    <strong>Status:</strong> <span id="agent-current-status">Initializing agent...</span>
+                </div>
+                <div class="reasoning-steps"></div>
+                <div class="subtasks-progress"></div>
+                <div class="tool-executions"></div>
+            `;
+            document.getElementById('chatMessages').appendChild(container);
+            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return container;
+        }
+
+        function addReasoningStep(container, step) {
+            const stepsDiv = container.querySelector('.reasoning-steps');
+            const stepDiv = document.createElement('div');
+            stepDiv.className = `reasoning-step ${step.step_type}`;
+
+            const icon = getStepIcon(step.step_type);
+            const time = formatTime(step.timestamp);
+
+            stepDiv.innerHTML = `
+                <span class="step-icon">${icon}</span>
+                <span class="step-content">${escapeHtml(step.content)}</span>
+                <span class="step-time">${time}</span>
+            `;
+            stepsDiv.appendChild(stepDiv);
+            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function updateSubtaskStatus(container, subtask) {
+            const progressDiv = container.querySelector('.subtasks-progress');
+            let subtaskElement = progressDiv.querySelector(`[data-subtask="${subtask.id}"]`);
+
+            if (!subtaskElement) {
+                subtaskElement = document.createElement('div');
+                subtaskElement.dataset.subtask = subtask.id;
+                subtaskElement.className = 'subtask-item';
+                progressDiv.appendChild(subtaskElement);
+            }
+
+            subtaskElement.className = `subtask-item ${subtask.status}`;
+            const statusIcon = getStatusIcon(subtask.status);
+
+            subtaskElement.innerHTML = `
+                <span class="status-icon">${statusIcon}</span>
+                <span class="subtask-desc">${escapeHtml(subtask.description)}</span>
+            `;
+
+            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function addToolExecution(container, execution) {
+            const execDiv = container.querySelector('.tool-executions');
+            const execElement = document.createElement('div');
+            execElement.className = 'tool-execution';
+
+            const argsStr = JSON.stringify(execution.arguments);
+            const resultStr = execution.result ? formatJson(execution.result) : 'Executing...';
+
+            execElement.innerHTML = `
+                <div class="tool-execution-name">🔧 ${execution.tool_name}</div>
+                <div class="tool-execution-args">Args: ${escapeHtml(argsStr)}</div>
+                ${execution.result ? `<div class="tool-execution-result">${escapeHtml(resultStr)}</div>` : ''}
+            `;
+
+            execDiv.appendChild(execElement);
+            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function getStepIcon(stepType) {
+            const icons = {
+                'planning': '📋',
+                'tool_call': '🔧',
+                'validation': '✅',
+                'error': '❌',
+                'summary': '📝'
+            };
+            return icons[stepType] || '•';
+        }
+
+        function getStatusIcon(status) {
+            const icons = {
+                'pending': '⏳',
+                'in_progress': '⚙️',
+                'completed': '✓',
+                'failed': '✗'
+            };
+            return icons[status] || '•';
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
         }
     </script>
 </body>

@@ -9,6 +9,8 @@ duckduckgo-search
 mcp
 flask
 flask-cors
+langgraph>=0.0.40
+langgraph-checkpoint-sqlite>=1.0.0
 
 # Testing dependencies
 pytest>=7.4.0
