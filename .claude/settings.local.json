@@ -3,9 +3,20 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(git -C /c/Users/pinak/code/finance-chat-agent log --oneline)",
-      "Bash(python app.py:*)"
+      "Bash(python app.py:*)",
+      "Bash(python main.py:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(taskkill:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)"
     ]
   },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "finance-mcp"
+  ],
   "disabledMcpjsonServers": [
     "finance-mcp"
   ]

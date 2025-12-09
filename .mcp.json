@@ -3,16 +3,15 @@
 
     "finance-mcp": {
       "type": "stdio",
-      "command": "c:\\Users\\pinak\\.local\\bin\\uv.exe",
+      "command": "python",
       "args": [
-        "run",
-        "--with",
-        "mcp[cli]", 
-        "mcp",
+        "-m",
+        "mcp.cli.cli",
         "run",
         "C:\\Users\\pinak\\code\\finance-mcp-server\\main.py"
       ],
-      "env": {}
-    }  
+      "env": {},
+      "cwd": "C:\\Users\\pinak\\code\\finance-mcp-server"
+    }
   }
 }

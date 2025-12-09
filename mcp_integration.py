@@ -7,8 +7,8 @@ import asyncio
 import json
 import logging
 from typing import Any
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 from langchain_core.tools import tool
 
 # Configure logging
@@ -19,22 +19,20 @@ logger = logging.getLogger(__name__)
 class MCPToolManager:
     """Manages connection to MCP server and converts MCP tools to LangChain tools"""
 
-    def __init__(self, server_script_path: str):
-        self.server_script_path = server_script_path
+    def __init__(self, server_url: str = "http://localhost:8000/sse"):
+        self.server_url = server_url
         self.session = None
         self.tools_list = []
+        self.sse_context = None
+        self.session_context = None
 
     async def connect(self):
-        """Connect to the MCP server"""
-        server_params = StdioServerParameters(
-            command="uv",
-            args=["run", "--with", "mcp[cli]", "mcp", "run", self.server_script_path],
-            env=None
-        )
+        """Connect to the MCP server via HTTP/SSE"""
+        logger.info(f"Connecting to MCP server at {self.server_url}")
 
-        # Create stdio client context
-        self.stdio_context = stdio_client(server_params)
-        self.read, self.write = await self.stdio_context.__aenter__()
+        # Create SSE client context
+        self.sse_context = sse_client(self.server_url)
+        self.read, self.write = await self.sse_context.__aenter__()
 
         # Create session context
         self.session_context = ClientSession(self.read, self.write)
@@ -42,6 +40,8 @@ class MCPToolManager:
 
         # Initialize the connection
         await self.session.initialize()
+
+        logger.info("Successfully connected to MCP server via SSE")
 
         return self
 
@@ -194,21 +194,21 @@ class MCPToolManager:
         """Close the MCP connection"""
         if self.session_context:
             await self.session_context.__aexit__(None, None, None)
-        if self.stdio_context:
-            await self.stdio_context.__aexit__(None, None, None)
+        if self.sse_context:
+            await self.sse_context.__aexit__(None, None, None)
 
 
-async def get_mcp_tools(server_path: str):
+async def get_mcp_tools(server_url: str = "http://localhost:8000/sse"):
     """
     Connect to MCP server and return LangChain-compatible tools
 
     Args:
-        server_path: Path to the MCP server script
+        server_url: URL of the MCP server (HTTP/SSE endpoint)
 
     Returns:
         List of LangChain tools
     """
-    manager = MCPToolManager(server_path)
+    manager = MCPToolManager(server_url)
     await manager.connect()
 
     # Get tools
@@ -220,14 +220,14 @@ async def get_mcp_tools(server_path: str):
     return tools, manager
 
 
-def get_tools_sync(server_path: str):
+def get_tools_sync(server_url: str = "http://localhost:8000/sse"):
     """
     Synchronous wrapper to get MCP tools
 
     Args:
-        server_path: Path to the MCP server script
+        server_url: URL of the MCP server (HTTP/SSE endpoint)
 
     Returns:
         Tuple of (tools list, manager instance)
     """
-    return asyncio.run(get_mcp_tools(server_path))
+    return asyncio.run(get_mcp_tools(server_url))

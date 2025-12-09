@@ -18,8 +18,8 @@ from agent.routing import route_next_action
 class FinanceAgent:
     """Main agent class that wraps LangGraph execution"""
 
-    def __init__(self, mcp_server_path: str):
-        self.mcp_server_path = mcp_server_path
+    def __init__(self, mcp_server_url: str = "http://localhost:8000/sse"):
+        self.mcp_server_url = mcp_server_url
         self.mcp_manager = None
         self.graph = None
         self.tools = None
@@ -27,7 +27,7 @@ class FinanceAgent:
     async def initialize(self):
         """Initialize MCP connection and build graph"""
         # Connect to MCP
-        self.mcp_manager = MCPToolManager(self.mcp_server_path)
+        self.mcp_manager = MCPToolManager(self.mcp_server_url)
         await self.mcp_manager.connect()
 
         # Get available tools
